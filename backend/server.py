@@ -1,5 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Header
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -8,9 +7,11 @@ import logging
 import base64
 import json
 import re
+import time
+from collections import defaultdict, deque
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Deque
 import uuid
 from datetime import datetime, timezone
 
@@ -26,8 +27,58 @@ db = client[os.environ.get('DB_NAME', 'test_database')]
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
+# Security constants
+MAX_IMAGE_BASE64_LEN = 8_000_000        # ~6MB decoded — plenty for any phone screenshot
+ANALYZE_RATE_PER_MIN = 12                # per device_id / IP
+DEVICE_ID_MIN_LEN = 8
+DEVICE_ID_MAX_LEN = 128
+DEVICE_ID_REGEX = re.compile(r"^[A-Za-z0-9\-_]+$")
+
+# In-memory sliding-window rate limiter (per device / IP)
+_rate_buckets: Dict[str, Deque[float]] = defaultdict(deque)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Poker Trainer AI")
 api_router = APIRouter(prefix="/api")
+
+
+# -------------------- Helpers --------------------
+def resolve_owner(request: Request, x_device_id: Optional[str]) -> str:
+    """Return a stable owner id. Prefers X-Device-Id header (validated),
+    falls back to client IP so legacy clients keep working (they just share
+    a bucket by IP)."""
+    if x_device_id:
+        if (
+            DEVICE_ID_MIN_LEN <= len(x_device_id) <= DEVICE_ID_MAX_LEN
+            and DEVICE_ID_REGEX.match(x_device_id)
+        ):
+            return f"dev:{x_device_id}"
+        # Bad header format — treat as anonymous rather than 400 so poor
+        # clients keep working but can't spoof arbitrary owner ids.
+        logger.info("Ignoring malformed X-Device-Id header")
+    ip = request.client.host if request.client else "unknown"
+    return f"ip:{ip}"
+
+
+def rate_limit(owner: str, limit: int, window_s: int = 60) -> None:
+    """Sliding window; raises 429 if over budget."""
+    now = time.time()
+    bucket = _rate_buckets[owner]
+    # drop old entries
+    while bucket and bucket[0] < now - window_s:
+        bucket.popleft()
+    if len(bucket) >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail="Muitas requisições. Aguarde alguns segundos e tente de novo.",
+        )
+    bucket.append(now)
+
 
 # -------------------- Models --------------------
 class DecideRequest(BaseModel):
@@ -40,6 +91,7 @@ class DecideRequest(BaseModel):
     n_opponents: int = 1
     style: str = "balanced"  # tight | balanced | loose
 
+
 class DecisionResponse(BaseModel):
     action: str
     bet_size: float
@@ -49,9 +101,11 @@ class DecisionResponse(BaseModel):
     pot_odds: float
     chen_score: Optional[float] = None
 
+
 class ImageAnalyzeRequest(BaseModel):
     image_base64: str
     mime_type: str = "image/jpeg"
+
 
 class DetectedState(BaseModel):
     hero_cards: List[str] = []
@@ -63,6 +117,7 @@ class DetectedState(BaseModel):
     n_opponents: int = 1
     notes: str = ""
     detection_confidence: float = 0
+
 
 class HistoryEntry(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -77,6 +132,7 @@ class HistoryEntry(BaseModel):
     pot: float
     equity: Optional[Dict[str, float]] = None
     source: str = "manual"  # manual | image
+
 
 class HistoryCreate(BaseModel):
     hero_cards: List[str]
@@ -94,7 +150,7 @@ class HistoryCreate(BaseModel):
 # -------------------- Routes --------------------
 @api_router.get("/")
 async def root():
-    return {"message": "Poker Trainer AI API", "version": "1.0.0"}
+    return {"message": "Poker Trainer AI API", "version": "1.1.0"}
 
 
 @api_router.post("/decide", response_model=DecisionResponse)
@@ -112,21 +168,37 @@ async def decide_endpoint(req: DecideRequest):
         )
         return result
     except ValueError as e:
+        # Client-facing message is safe (comes from our own engine).
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logging.exception("decide error")
-        raise HTTPException(status_code=500, detail=f"Erro no motor: {e}")
+    except Exception:
+        logger.exception("decide error")
+        raise HTTPException(status_code=500, detail="Erro no motor de decisão")
 
 
 @api_router.post("/analyze-image")
-async def analyze_image(req: ImageAnalyzeRequest):
+async def analyze_image(
+    payload: ImageAnalyzeRequest,
+    request: Request,
+    x_device_id: Optional[str] = Header(None, alias="X-Device-Id"),
+):
     """Analyze a poker table screenshot using Claude Sonnet 4.5 vision."""
     if not EMERGENT_LLM_KEY:
-        raise HTTPException(status_code=500, detail="EMERGENT_LLM_KEY não configurada")
+        raise HTTPException(status_code=500, detail="Servidor mal configurado")
 
-    # Validate base64 image
+    # Rate limit (denial-of-wallet protection)
+    owner = resolve_owner(request, x_device_id)
+    rate_limit(owner, ANALYZE_RATE_PER_MIN, 60)
+
+    # Size cap — reject before base64 decode / LLM call
+    if len(payload.image_base64) > MAX_IMAGE_BASE64_LEN:
+        raise HTTPException(
+            status_code=413,
+            detail="Imagem grande demais. Reduza a resolução e tente novamente.",
+        )
+
+    # Validate base64
     try:
-        raw = base64.b64decode(req.image_base64, validate=True)
+        raw = base64.b64decode(payload.image_base64, validate=True)
         if len(raw) < 10:
             raise ValueError("empty image")
     except Exception:
@@ -163,7 +235,7 @@ async def analyze_image(req: ImageAnalyzeRequest):
 
         image_file = FileContent(
             content_type="image",
-            file_content_base64=req.image_base64,
+            file_content_base64=payload.image_base64,
         )
         msg = UserMessage(
             text="Analise a mesa de poker nesta imagem e retorne o JSON.",
@@ -180,9 +252,9 @@ async def analyze_image(req: ImageAnalyzeRequest):
         try:
             data = json.loads(match.group(0))
         except json.JSONDecodeError:
-            return DetectedState(notes=f"JSON inválido: {text[:150]}", detection_confidence=0)
+            # Do NOT echo raw LLM text back — could contain injected content.
+            return DetectedState(notes="JSON inválido retornado pela IA.", detection_confidence=0)
 
-        # Normalize
         detected = DetectedState(
             hero_cards=data.get("hero_cards", []) or [],
             community=data.get("community", []) or [],
@@ -195,51 +267,76 @@ async def analyze_image(req: ImageAnalyzeRequest):
             detection_confidence=float(data.get("detection_confidence") or 0),
         )
         return detected
-    except Exception as e:
-        logging.exception("analyze_image error")
-        raise HTTPException(status_code=500, detail=f"Erro na análise da imagem: {e}")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("analyze_image error")
+        raise HTTPException(status_code=500, detail="Erro na análise da imagem")
 
 
 @api_router.post("/history", response_model=HistoryEntry)
-async def create_history(entry: HistoryCreate):
+async def create_history(
+    entry: HistoryCreate,
+    request: Request,
+    x_device_id: Optional[str] = Header(None, alias="X-Device-Id"),
+):
+    owner = resolve_owner(request, x_device_id)
     obj = HistoryEntry(**entry.dict())
-    await db.history.insert_one(obj.dict())
+    doc = obj.dict()
+    doc["_owner"] = owner
+    await db.history.insert_one(doc)
     return obj
 
 
 @api_router.get("/history", response_model=List[HistoryEntry])
-async def list_history(limit: int = 50):
-    docs = await db.history.find({}, {"_id": 0}).sort("timestamp", -1).to_list(limit)
+async def list_history(
+    request: Request,
+    x_device_id: Optional[str] = Header(None, alias="X-Device-Id"),
+    limit: int = 50,
+):
+    owner = resolve_owner(request, x_device_id)
+    limit = max(1, min(int(limit), 200))
+    docs = (
+        await db.history
+        .find({"_owner": owner}, {"_id": 0, "_owner": 0})
+        .sort("timestamp", -1)
+        .to_list(limit)
+    )
     return [HistoryEntry(**d) for d in docs]
 
 
 @api_router.delete("/history/{entry_id}")
-async def delete_history(entry_id: str):
-    res = await db.history.delete_one({"id": entry_id})
+async def delete_history(
+    entry_id: str,
+    request: Request,
+    x_device_id: Optional[str] = Header(None, alias="X-Device-Id"),
+):
+    owner = resolve_owner(request, x_device_id)
+    res = await db.history.delete_one({"id": entry_id, "_owner": owner})
     return {"deleted": res.deleted_count}
 
 
 @api_router.delete("/history")
-async def clear_history():
-    res = await db.history.delete_many({})
+async def clear_history(
+    request: Request,
+    x_device_id: Optional[str] = Header(None, alias="X-Device-Id"),
+):
+    owner = resolve_owner(request, x_device_id)
+    res = await db.history.delete_many({"_owner": owner})
     return {"deleted": res.deleted_count}
 
 
 app.include_router(api_router)
 
+# CORS: keep open for the mobile app / preview URL, but drop credentials
+# since we don't rely on cookies. This makes the wildcard * safe.
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Device-Id"],
 )
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 
 @app.on_event("shutdown")

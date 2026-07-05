@@ -1,4 +1,7 @@
-// Central backend API helper
+// Central backend API helper. Every request carries the persistent
+// device id so backend can scope /api/history to the caller.
+import { getDeviceId } from "@/src/utils/device-id";
+
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
 export interface DecideRequest {
@@ -51,10 +54,12 @@ export interface HistoryEntry {
 
 async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const url = `${BASE}/api${path}`;
+  const deviceId = await getDeviceId();
   const res = await fetch(url, {
     ...opts,
     headers: {
       "Content-Type": "application/json",
+      "X-Device-Id": deviceId,
       ...(opts.headers || {}),
     },
   });
