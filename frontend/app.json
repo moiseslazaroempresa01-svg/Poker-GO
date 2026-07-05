@@ -1,24 +1,40 @@
 {
   "expo": {
-    "name": "frontend",
+    "name": "Poker Trainer AI",
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.appforge.wcpxfr"
+      "bundleIdentifier": "com.emergent.pokertrainerai.k5brb7",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Capturar screenshots de mesas de poker para análise",
+        "NSPhotoLibraryUsageDescription": "Selecionar screenshots de mesas de poker para análise",
+        "UIBackgroundModes": [
+          "audio"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#0A1410"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.appforge.wcpxfr"
+      "package": "com.emergent.pokertrainerai.k5brb7",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.WAKE_LOCK"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -33,9 +49,18 @@
           "image": "./assets/images/splash-image.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#0A1410"
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Selecionar screenshots de poker para análise",
+          "cameraPermission": "Capturar screenshots de mesas de poker"
+        }
+      ],
+      "expo-audio",
+      "react-native-nitro-screen-recorder"
     ],
     "experiments": {
       "typedRoutes": true

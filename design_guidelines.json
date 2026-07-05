@@ -1,0 +1,179 @@
+{
+  "app_name": "Poker Trainer AI Mobile",
+  "personality": "7 Dark-First Utility DARK",
+  "personality_one_liner": "A serious, command-center training tool with a premium OLED-friendly dark slate/green casino aesthetic, prioritizing glanceable metrics and high-contrast poker actions.",
+  "color": {
+    "surface": "#0A1410",
+    "onSurface": "#F4F7F5",
+    "surfaceSecondary": "#13221C",
+    "onSurfaceSecondary": "#A5BBAF",
+    "surfaceTertiary": "#1B3027",
+    "onSurfaceTertiary": "#8DA69A",
+    "surfaceInverse": "#E5E7EB",
+    "onSurfaceInverse": "#0A1410",
+    "brand": "#F59E0B",
+    "brandPrimary": "#D97706",
+    "onBrandPrimary": "#FFFBEB",
+    "brandSecondary": "#B45309",
+    "onBrandSecondary": "#FEF3C7",
+    "brandTertiary": "#78350F",
+    "onBrandTertiary": "#FDE68A",
+    "success": "#10B981",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F59E0B",
+    "onWarning": "#1C1917",
+    "error": "#EF4444",
+    "onError": "#FFFFFF",
+    "info": "#3B82F6",
+    "onInfo": "#FFFFFF",
+    "border": "#274034",
+    "borderStrong": "#3B5C4D",
+    "divider": "#182C24"
+  },
+  "typography": {
+    "displayFontFamily": "Barlow Condensed",
+    "textFontFamily": "DM Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Use tight vertical rhythm for data and large, thumb-friendly tap targets for actions. Maintain strict safe area clearances. Elements like 'Nova Análise' CTA should be pinned at the bottom above the tab bar.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": "true",
+    "do's": [
+      "Use heavy tint + blur on the bottom tab bar",
+      "Use for the floating TTS indicator overlay",
+      "Use as a backdrop behind the prominent Recommendation card overlay"
+    ],
+    "dont's": [
+      "Avoid on dense tracker data grids or manual card selectors",
+      "Never blur body text or the primary input form"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Disclaimer",
+      "purpose": "Mandatory warning screen ensuring users know the app is exclusively for offline/simulator training, not real-money play.",
+      "states": {
+        "loading": "Centered spinner",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Full-bleed dark image background with gradient top-to-bottom scrim. Large bold headline in Barlow Condensed, body text explaining terms in DM Sans, and a sticky sticky full-width primary CTA 'Aceitar e Continuar' at the bottom."
+    },
+    {
+      "name": "Home (Analisar)",
+      "purpose": "Primary dashboard to trigger a new session, view quick stats, and launch image capture or upload.",
+      "states": {
+        "loading": "Spinner over surfaceSecondary",
+        "empty": "No recent sessions: display a high-contrast illustration of an empty poker table with 'Nenhuma análise recente' and a 'Nova Análise' button.",
+        "error": "Error loading history, show retry button."
+      },
+      "layout": "Prominent 'Nova Análise' sticky primary CTA at bottom. Above it, a visually dense but clean summary of equity, last analyzed hand, and tracking widgets. A floating TTS speaker indicator resides on the bottom right edge of the screen."
+    },
+    {
+      "name": "Analysis & Recommendation",
+      "purpose": "The core visual output displaying the poker table state and immediate AI recommendation.",
+      "states": {
+        "loading": "Skeleton of the poker table and pulsating recommendation card.",
+        "empty": "N/A",
+        "error": "Failed to analyze image/hand: show error toast and retry capture."
+      },
+      "layout": "Top section: High-contrast 2D top-down view of a poker table (dark green/slate) showing Community Cards, Pot, and Stacks. Bottom section: Overlaid bottom-sheet/glass card with massive recommendation text (Desistir/Red, Pagar/Yellow, Aumentar/Green, Tudo/Amber). Contains confidence %, sizing, and Claude Sonnet reasoning text in DM Sans."
+    },
+    {
+      "name": "Manual",
+      "purpose": "Manual input screen for private/community cards, stacks, and positions when camera is not used.",
+      "states": {
+        "loading": "Processing manual inputs",
+        "empty": "N/A",
+        "error": "Invalid hand state error."
+      },
+      "layout": "Dense utility grid. Card suit/rank pickers using grouped segmented controls, position selectors as pill grids. Submit button ('Analisar Mão') sticky at bottom inside KeyboardAvoidingView."
+    },
+    {
+      "name": "Histórico",
+      "purpose": "Session log of past hands and recommendations for review.",
+      "states": {
+        "loading": "List skeleton",
+        "empty": "Illustration of playing cards with 'Seu histórico está vazio'.",
+        "error": "List fetch error with Retry."
+      },
+      "layout": "Vertical list view. Each row shows hand preview (AA, KQs, etc.), pot size, and the recommended action as a colored badge. Clean dividers."
+    },
+    {
+      "name": "Ajustes",
+      "purpose": "Settings for language, TTS toggle, voice choice, and AI aggressiveness profile.",
+      "states": {
+        "loading": "Loading preferences",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Simple list of rows with tinted icon containers (brandTertiary rounded square). Switches for TTS. Segemented control for style profile."
+    }
+  ],
+  "haptics": {
+    "primary_cta_press": "impactMedium",
+    "tab_change": "selection",
+    "recommendation_load_success": "notificationSuccess",
+    "card_selector_tap": "impactLight",
+    "tts_toggle": "impactLight"
+  },
+  "images": {
+    "app_logo": {
+      "url": "https://images.unsplash.com/photo-1679669693237-8f8961d56da7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHwxfHxjYXNpbm8lMjBjaGlwcyUyMGxvZ28lMjB0cmFuc3BhcmVudHxlbnwwfHx8fDE3ODI3NTM3MTV8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Abstract chips overlapping"
+    },
+    "disclaimer_background": {
+      "url": "https://images.pexels.com/photos/4253690/pexels-photo-4253690.jpeg",
+      "alt": "Dark moody playing cards background"
+    },
+    "empty_history": {
+      "url": "https://images.unsplash.com/photo-1619689350720-bd3dff470ec5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTJ8MHwxfHNlYXJjaHwzfHxkYXJrJTIwY2FzaW5vJTIwcG9rZXIlMjB0YWJsZSUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzgyOTU2MjgxfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Abstract blue and white textile indicating empty dark cards"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the Dark-First Utility DARK guidelines. Do not use pure black; use the deep green/slate hex values provided to simulate an OLED-friendly poker felt.",
+    "Implement the Brazilian Portuguese translations exactly as required (Fold=Desistir, Call=Pagar, Raise=Aumentar, All-in=Tudo).",
+    "The primary recommendation card MUST color code actions: Desistir (Red / Error), Pagar (Yellow / Warning), Aumentar (Green / Success), Tudo (Amber / BrandPrimary). This overrides typical 'error' semantics because it's a poker action.",
+    "Place a sticky 'Nova Análise' button on the Home Dashboard.",
+    "Floating TTS Speaker indicator must use glassmorphism and be prominently displayed when TTS is active in the settings.",
+    "Utilize Barlow Condensed for large metrics, confidence percentages, and poker card ranks to give a professional, utility-first UI feel.",
+    "Ensure 'Disclaimer' screen requires mandatory acceptance and uses the provided gradient-to-dark scrim over the background image."
+  ]
+}
