@@ -59,7 +59,15 @@
         }
       ],
       "expo-audio",
-      "react-native-nitro-screen-recorder"
+      [
+        "react-native-nitro-screen-recorder",
+        {
+          "enableCameraPermission": false,
+          "enableMicrophonePermission": false,
+          "disableExperimental": true,
+          "showPluginLogs": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
